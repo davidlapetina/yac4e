@@ -1,0 +1,67 @@
+# --- Java / Maven ---
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+.flattened-pom.xml
+
+# Quarkus
+.quarkus/
+*.env
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.vite/
+
+# Playwright / Vitest
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+coverage/
+
+# --- Local config & secrets ---
+.env
+.env.*
+!.env.example
+*.local
+local.properties
+*.pem
+*.key
+*.p12
+*.jks
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+*.swp
+*.swo
+.settings/
+.project
+.classpath
+nbproject/
+
+# --- OS ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# --- Logs & temp ---
+*.log
+logs/
+tmp/

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/yac4e/canonical-model.schema.json",
+  "title": "YaC4e Canonical Model",
+  "type": "object",
+  "required": ["schemaVersion", "workspace"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "workspace": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+    "elements": { "type": "array" },
+    "relationships": { "type": "array" },
+    "views": { "type": "array" },
+    "links": { "type": "array" },
+    "metadataDefinitions": { "type": "array" }
+  }
+}
