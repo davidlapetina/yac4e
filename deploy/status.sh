@@ -9,7 +9,7 @@ docker compose ps
 if [[ -f ./.env ]]; then
   # shellcheck disable=SC1091
   set -a; source ./.env; set +a
-  PORT="${YAC4E_PORT:-8080}"
+  PORT="${YAC4E_PORT:-38080}"
   code="$(curl -s -o /dev/null -w '%{http_code}' -u "${YAC4E_BASIC_USERNAME}:${YAC4E_BASIC_PASSWORD}" \
     "http://localhost:${PORT}/api/workspaces" 2>/dev/null || echo 000)"
   echo

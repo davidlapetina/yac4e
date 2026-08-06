@@ -46,7 +46,8 @@ services:
       YAC4E_SEED_AGENT_TOKEN_NAME: "Deployment agent token"
       YAC4E_SEED_AGENT_TOKEN_PRINCIPAL_ID: "deploy-agent"
     ports:
-      - "${YAC4E_PORT:-8080}:8080"
+      # Host port only. The container always listens on 8080 internally.
+      - "${YAC4E_PORT:-38080}:8080"
     healthcheck:
       # The API requires auth, so probe with the configured Basic credentials.
       test: ["CMD-SHELL", "curl -fsS -u \"$$YAC4E_BASIC_USERNAME:$$YAC4E_BASIC_PASSWORD\" http://localhost:8080/api/workspaces > /dev/null || exit 1"]
