@@ -28,7 +28,9 @@ export function toReactFlow(
             element,
             warningCount,
             linkCount: element.linkCount,
-            highlighted: highlightedId === element.id
+            highlighted: highlightedId === element.id,
+            locked: member.locked,
+            zIndex: member.zIndex
           },
           style: { width: member.width, height: member.height, zIndex: member.zIndex }
         }
@@ -67,9 +69,11 @@ export function toLayoutPayload(viewVersion: number, nodes: Node[], edges: Edge[
       y: node.position.y,
       width: node.measured?.width ?? numberStyle(node.style?.width) ?? node.width ?? 260,
       height: node.measured?.height ?? numberStyle(node.style?.height) ?? node.height ?? 150,
-      locked: Boolean(node.dragging === false && node.selectable === false),
+      // Carry the stored flags through rather than re-deriving them: React Flow does not
+      // track lock state, and array order is not a stable stand-in for the saved z-index.
+      locked: booleanData(node.data?.locked, false),
       visible: true,
-      zIndex: index + 1,
+      zIndex: numberData(node.data?.zIndex, index + 1),
       displaySettings: {}
     })),
     relationships: edges.map((edge) => ({
@@ -89,6 +93,14 @@ export function nodeTypeFor(type: ArchitectureElement['type'], hasVisibleChild =
 
 function hasVisibleChild(elementId: string, elements: ArchitectureElement[], visibleElementIds: Set<string>) {
   return elements.some((element) => element.parentElementId === elementId && visibleElementIds.has(element.id));
+}
+
+function booleanData(value: unknown, fallback: boolean) {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function numberData(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 function numberStyle(value: unknown) {

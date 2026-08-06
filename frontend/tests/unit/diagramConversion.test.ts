@@ -56,4 +56,35 @@ describe('diagram conversion', () => {
     expect(payload.viewVersion).toBe(4);
     expect(payload.elements[0]).toMatchObject({ elementId: 'e1', x: 10, y: 20, width: 200, height: 100 });
   });
+
+  it('carries locked and zIndex through the round trip instead of resetting them', () => {
+    const view: DiagramView = {
+      id: 'v1',
+      workspaceId: 'w1',
+      name: 'View',
+      description: '',
+      type: 'CONTAINER',
+      layoutDirection: 'LEFT_TO_RIGHT',
+      settings: {},
+      version: 4,
+      createdAt: '',
+      updatedAt: '',
+      elements: [{ id: 'm1', viewId: 'v1', elementId: 'e1', x: 12, y: 34, width: 260, height: 150, locked: true, visible: true, zIndex: 9, displaySettings: {} }],
+      relationships: []
+    };
+    const { nodes } = toReactFlow(view, [element], [relationship], [], undefined);
+    expect(nodes[0].data).toMatchObject({ locked: true, zIndex: 9 });
+
+    const payload = toLayoutPayload(view.version, nodes, []);
+    expect(payload.elements[0]).toMatchObject({ locked: true, zIndex: 9 });
+  });
+
+  it('falls back to array order for zIndex only when the node carries no stored value', () => {
+    const payload = toLayoutPayload(1, [
+      { id: 'a', position: { x: 0, y: 0 }, data: {}, width: 10, height: 10 },
+      { id: 'b', position: { x: 0, y: 0 }, data: { zIndex: 42, locked: true }, width: 10, height: 10 }
+    ], []);
+    expect(payload.elements[0]).toMatchObject({ zIndex: 1, locked: false });
+    expect(payload.elements[1]).toMatchObject({ zIndex: 42, locked: true });
+  });
 });

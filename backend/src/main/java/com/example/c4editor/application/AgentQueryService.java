@@ -171,12 +171,24 @@ public class AgentQueryService {
         int pageSize = pageSize(request.pageSize());
         QueryFilters filters = request.filters();
         QueryInclude include = request.include();
+        boolean includeMetadata = include == null || include.metadata();
+        boolean includeRelationships = include != null && include.relationships();
+        boolean includeLinks = include != null && include.links();
+        boolean includeValidation = include != null && include.validation();
+        // Resolve the shared collections once. Doing this per element turned a single query into
+        // one full validation pass and one relationship scan for every matched element.
+        List<ArchitectureRelationshipEntity> workspaceRelationships = includeRelationships ? relationships(workspaceId) : List.of();
+        Map<UUID, List<ValidationIssue>> issuesByElement = includeValidation
+                ? validationIssues(workspaceId).stream().filter(i -> i.elementId() != null).collect(Collectors.groupingBy(ValidationIssue::elementId))
+                : Map.of();
         List<ArchitectureQueryResult> matched = elements(workspaceId).stream()
                 .filter(e -> matchesFilters(e, filters))
-                .map(e -> new ArchitectureQueryResult(agentElement(e, include == null || include.metadata()), matchedFields(e, request.text(), filters),
-                        include != null && include.relationships() ? allRelated(workspaceId, e.id, include.metadata()) : List.of(),
-                        include != null && include.links() ? links(e.id) : List.of(),
-                        include != null && include.validation() ? validationIssues(workspaceId).stream().filter(i -> e.id.equals(i.elementId())).toList() : List.of()))
+                .map(e -> new ArchitectureQueryResult(agentElement(e, includeMetadata), matchedFields(e, request.text(), filters),
+                        includeRelationships ? workspaceRelationships.stream()
+                                .filter(r -> r.sourceElementId.equals(e.id) || r.targetElementId.equals(e.id))
+                                .map(r -> agentRelationship(r, includeMetadata)).toList() : List.of(),
+                        includeLinks ? links(e.id) : List.of(),
+                        includeValidation ? issuesByElement.getOrDefault(e.id, List.of()) : List.of()))
                 .filter(r -> request.text() == null || request.text().isBlank() || !r.matchedFields().isEmpty())
                 .sorted(Comparator.comparing(r -> r.element().name()))
                 .toList();
@@ -200,12 +212,21 @@ public class AgentQueryService {
                 .filter(e -> includeExternalSystems || e.type != ArchitectureElementType.EXTERNAL_SYSTEM)
                 .map(e -> agentElement(e, true))
                 .toList();
-        List<AgentRelationship> resultRelationships = traversal.relationshipIds.stream().map(id -> agentRelationship(relationship(workspaceId, id), true)).toList();
+        // Relationships and paths must not reference elements that the filter above removed,
+        // otherwise the response contains dangling endpoint ids.
+        Set<UUID> retainedElementIds = resultElements.stream().map(AgentElement::id).collect(Collectors.toCollection(LinkedHashSet::new));
+        retainedElementIds.add(elementId);
+        List<AgentRelationship> resultRelationships = traversal.relationshipIds.stream()
+                .map(id -> relationship(workspaceId, id))
+                .filter(r -> retainedElementIds.contains(r.sourceElementId) && retainedElementIds.contains(r.targetElementId))
+                .map(r -> agentRelationship(r, true))
+                .toList();
+        List<GraphPath> resultPaths = traversal.paths.stream().filter(p -> retainedElementIds.containsAll(p.elementIds())).toList();
         List<UUID> traceElementIds = new ArrayList<>();
         traceElementIds.add(elementId);
         resultElements.stream().map(AgentElement::id).filter(id -> !traceElementIds.contains(id)).forEach(traceElementIds::add);
         return new DependencyResponse(elementId, direction == null ? DependencyDirection.OUTGOING : direction, depth, resultElements,
-                resultRelationships, traversal.paths, trace(workspace, traceElementIds,
+                resultRelationships, resultPaths, trace(workspace, traceElementIds,
                 resultRelationships.stream().map(AgentRelationship::id).toList(), Map.of("relationshipTypes", types), depth),
                 new AgentLimits(maxElements, MAX_RELATIONSHIPS), traversal.truncated);
     }
@@ -314,7 +335,12 @@ public class AgentQueryService {
         String content = renderContext(request.format() == null ? LlmContextFormat.MARKDOWN : request.format(), request.query(), graph, request.includeMetadata(), request.includeLinks(), request.includeValidation());
         boolean truncated = graph.truncated() || content.length() > maxChars;
         if (content.length() > maxChars) {
-            content = content.substring(0, Math.max(0, maxChars - 32)) + "\n[TRUNCATED]";
+            // Keep the result within maximumCharacters: reserving a fixed 32 chars overshot the
+            // budget whenever the caller asked for a small limit.
+            String marker = "\n[TRUNCATED]";
+            content = maxChars <= marker.length()
+                    ? content.substring(0, maxChars)
+                    : content.substring(0, maxChars - marker.length()) + marker;
         }
         return new LlmContextResponse(request.format() == null ? LlmContextFormat.MARKDOWN : request.format(), content,
                 graph.trace().includedElementIds(), graph.trace().includedRelationshipIds(), truncated, graph.trace());
@@ -394,13 +420,22 @@ public class AgentQueryService {
 
     private List<AgentElement> children(UUID workspaceId, UUID root, boolean includeMetadata, int depth, int maxElements) {
         List<AgentElement> result = new ArrayList<>();
+        // Index the hierarchy once instead of rescanning every element for each queue entry, and
+        // track visited ids so a cyclic parent chain cannot emit the same child repeatedly.
+        Map<UUID, List<ArchitectureElementEntity>> childrenByParent = elements(workspaceId).stream()
+                .filter(e -> e.parentElementId != null)
+                .collect(Collectors.groupingBy(e -> e.parentElementId));
+        Set<UUID> visited = new HashSet<>();
+        visited.add(root);
         ArrayDeque<PathState> queue = new ArrayDeque<>();
         queue.add(new PathState(root, List.of(root), List.of(), 0));
         while (!queue.isEmpty() && result.size() < maxElements) {
             PathState state = queue.removeFirst();
             if (state.depth >= depth) continue;
-            for (ArchitectureElementEntity child : elements(workspaceId).stream().filter(e -> state.elementId.equals(e.parentElementId)).toList()) {
+            for (ArchitectureElementEntity child : childrenByParent.getOrDefault(state.elementId, List.of())) {
+                if (!visited.add(child.id)) continue;
                 result.add(agentElement(child, includeMetadata));
+                if (result.size() >= maxElements) break;
                 queue.add(new PathState(child.id, append(state.elementPath, child.id), List.of(), state.depth + 1));
             }
         }
@@ -562,8 +597,12 @@ public class AgentQueryService {
 
     private static boolean tagsContain(Map<String, Object> metadata, List<String> tags) {
         if (tags == null || tags.isEmpty()) return true;
-        Object classification = metadata.get("classification");
-        return classification != null && tags.stream().allMatch(tag -> classification.toString().toLowerCase(Locale.ROOT).contains(tag.toLowerCase(Locale.ROOT)));
+        // Match against classification.tags specifically. Matching the stringified classification
+        // map meant a tag filter also matched domain, criticality, or any other field in it.
+        if (metadata == null || !(metadata.get("classification") instanceof Map<?, ?> classification)) return false;
+        if (!(classification.get("tags") instanceof List<?> actual)) return false;
+        Set<String> present = actual.stream().filter(Objects::nonNull).map(v -> v.toString().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+        return tags.stream().allMatch(tag -> present.contains(tag.toLowerCase(Locale.ROOT)));
     }
 
     private static boolean matchesBoolean(String actual, Boolean expected) {

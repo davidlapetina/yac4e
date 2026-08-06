@@ -154,6 +154,9 @@ export function DiagramCanvas({ workspaceId, view, elements, relationships, issu
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
+      // Never treat typing inside a field as a canvas shortcut: Backspace while editing text
+      // would otherwise remove the selected nodes from the view.
+      if (isEditableTarget(event.target)) return;
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -243,6 +246,16 @@ export function DiagramCanvas({ workspaceId, view, elements, relationships, issu
       </div>
     </section>
   );
+}
+
+export function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    return !(target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).disabled;
+  }
+  return false;
 }
 
 function parentBoundaryForNode(node: Node<C4NodeData>, nodes: Node<C4NodeData>[], elements: ArchitectureElement[]) {

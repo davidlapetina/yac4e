@@ -8,6 +8,7 @@ import { ExportModal } from '../features/exports/ExportModal';
 import { ModelExplorer } from '../features/model/ModelExplorer';
 import { ImportModal } from '../features/model/ImportModal';
 import { PropertiesPanel } from '../features/model/PropertiesPanel';
+import { WorkspacePicker } from '../features/model/WorkspacePicker';
 import { ProposalPanel } from '../features/proposals/ProposalPanel';
 import { SearchBox } from '../features/search/SearchBox';
 import { ValidationPanel } from '../features/validation/ValidationPanel';
@@ -87,9 +88,11 @@ export function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><Layers3 size={20} /> <strong>YaC4e</strong></div>
-        <select value={workspaceId} onChange={(event) => store.setWorkspace(event.target.value)}>
-          {(workspaces.data ?? []).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-        </select>
+        <WorkspacePicker
+          workspaces={workspaces.data ?? []}
+          workspaceId={workspaceId}
+          onSelect={(id) => store.setWorkspace(id)}
+        />
         <SearchBox workspaceId={workspaceId} />
         <button type="button" onClick={() => createView.mutate()} title="Create view"><Plus size={15} /> View</button>
         <button type="button" onClick={() => setProposalsOpen(true)} title="Review proposals"><GitPullRequestArrow size={15} /> Proposals</button>

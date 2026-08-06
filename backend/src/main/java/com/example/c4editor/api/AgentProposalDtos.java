@@ -91,7 +91,27 @@ public final class AgentProposalDtos {
             UUID scopeElementId,
             String scopeReference,
             LayoutDirection layoutDirection,
-            Map<String, Object> settings) {
+            Map<String, Object> settings,
+            List<ViewMemberDraft> elements,
+            Boolean includeRelationships) {
+    }
+
+    /**
+     * A single element placed on a proposed diagram view. Either {@code elementId} (an existing
+     * element) or {@code elementReference} (the clientReference of an element created earlier in
+     * the same proposal) must be supplied. Geometry is optional: omitted coordinates are laid out
+     * automatically so an agent does not have to compute positions.
+     */
+    public record ViewMemberDraft(
+            UUID elementId,
+            String elementReference,
+            Double x,
+            Double y,
+            Double width,
+            Double height,
+            Boolean locked,
+            Boolean visible,
+            Integer zIndex) {
     }
 
     public record ProposalValidationIssue(

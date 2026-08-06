@@ -8,7 +8,7 @@ The product goal is to treat architecture as a living model, not as a drawing. A
 
 ## Features
 
-- Create workspaces for architecture repositories.
+- Create and rename workspaces for architecture repositories.
 - Model C4 people, software systems, containers, components, data stores, and external systems.
 - Define typed relationships such as `USES`, `CALLS`, `READS_FROM`, `WRITES_TO`, `DEPENDS_ON`, and `AUTHENTICATES_WITH`.
 - Maintain hierarchy through canonical `parentElementId` links instead of canvas nesting.
@@ -27,6 +27,8 @@ The product goal is to treat architecture as a living model, not as a drawing. A
 - Export full diagrams as SVG or PNG from the frontend.
 - Expose an AI-agent read API for workspace summary, context, dependency traversal, impact analysis, validation queries, external reference resolution, and deterministic LLM-ready context.
 - Accept external agent architecture proposals with evidence, then review and apply or reject them from the UI.
+- Let agents propose diagram views complete with their elements, with automatic layout and relationship inclusion.
+- Review proposals in bulk: select several and apply or reject them in one pass.
 - Protect the UI/API with Basic Auth and support scoped API tokens for agent access.
 
 ## Screenshots
@@ -426,17 +428,28 @@ Rules:
 - Preserve detected source identity in metadata.custom.source when useful.
 - For source-code references, attach an external link with provider GITHUB, GITLAB, AZURE_DEVOPS, or OTHER when a stable URL is available.
 - Keep each proposal focused and reviewable. Use at most 50 changes per proposal.
+- Always finish a proposal with at least one CREATE_VIEW change, otherwise the elements you created appear on no diagram and the editor looks empty.
 - Do not claim the proposal was applied. YaC4e stores it for human review.
+
+Creating diagram views:
+- Use the CREATE_VIEW action and list the members in view.elements. A view without elements is created as an empty diagram and validation returns an EMPTY_VIEW warning.
+- Identify each member by elementId (an element that already exists) or elementReference (the clientReference of an element created earlier in the same proposal).
+- Do not compute layout. x, y, width, height, locked, visible, and zIndex are all optional. Omitted coordinates are placed on an automatic four-column grid, and sizes default to 260 x 150.
+- Relationships are attached automatically: every relationship whose source and target are both on the view is added to it. Set "includeRelationships": false only if you want elements without connections.
+- View types are SYSTEM_CONTEXT, CONTAINER, COMPONENT, and CUSTOM. Set scopeReference or scopeElementId to the element the view is scoped to: the software system for a CONTAINER view, the container for a COMPONENT view.
+- Propose one CONTAINER view per software system, and a COMPONENT view for any container with components worth showing.
+- An element listed twice is placed once and reported as a DUPLICATE_VIEW_ELEMENT warning. An unresolvable elementReference is an UNKNOWN_CLIENT_REFERENCE error, caught by /proposals/validate before anything is applied.
 
 Output process:
 1. Inspect the repository structure and identify deployable systems, services, applications, data stores, external integrations, and major components.
 2. Query YaC4e to understand the current workspace and avoid duplicates.
 3. Build one proposal JSON payload using the schema below.
-4. Validate the proposal:
+4. Add the CREATE_VIEW changes that place the proposed elements on diagrams.
+5. Validate the proposal:
    POST /api/agent/workspaces/{workspaceId}/proposals/validate
-5. If valid, submit it:
+6. If valid, submit it:
    POST /api/agent/workspaces/{workspaceId}/proposals
-6. Report the proposal ID, validation warnings, and the main source files used as evidence.
+7. Report the proposal ID, validation warnings, the element, relationship and view counts, and the main source files used as evidence.
 
 Proposal JSON shape:
 {
@@ -506,10 +519,59 @@ Proposal JSON shape:
           "path": "services/api"
         }
       ]
+    },
+    {
+      "action": "CREATE_VIEW",
+      "clientReference": "container_view",
+      "view": {
+        "name": "Service API containers",
+        "description": "Containers detected in the service repository.",
+        "type": "CONTAINER",
+        "scopeElementId": "{existingSoftwareSystemId}",
+        "layoutDirection": "LEFT_TO_RIGHT",
+        "elements": [
+          { "elementReference": "service_api" }
+        ]
+      },
+      "evidence": [
+        {
+          "kind": "FOLDER",
+          "path": "services/api"
+        }
+      ]
     }
   ]
 }
 ```
+
+### Diagram views with membership
+
+`CREATE_VIEW` places elements on the view through `view.elements`. A view proposed without
+`elements` is created as an empty diagram and the validation response returns an `EMPTY_VIEW`
+warning.
+
+Each entry in `view.elements` identifies one element by either `elementId` (an element that already
+exists in the workspace) or `elementReference` (the `clientReference` of an element created earlier
+in the same proposal). All geometry is optional:
+
+| Field | Default |
+|---|---|
+| `x`, `y` | laid out automatically in a four-column grid |
+| `width`, `height` | `260` x `150` |
+| `locked` | `false` |
+| `visible` | `true` |
+| `zIndex` | placement order, starting at `1` |
+
+Because positions are optional, an agent can propose a usable diagram without computing layout;
+the editor's automatic layout can still be applied afterwards.
+
+Relationships are added automatically: after the members are placed, every workspace relationship
+whose source and target are both on the view is attached to it. Set `"includeRelationships": false`
+in the view draft to place elements only.
+
+An element listed twice is placed once and reported as a `DUPLICATE_VIEW_ELEMENT` warning. An
+element reference that cannot be resolved is an `UNKNOWN_CLIENT_REFERENCE` error, so it is caught by
+`/proposals/validate` before anything is applied.
 
 Minimal validation command:
 
@@ -558,7 +620,14 @@ curl -H "Authorization: Bearer {agentApiToken}" \
 - `/api/agent/workspaces/{workspaceId}/external-resources`
 - `/api/agent/workspaces/{workspaceId}/resolve-reference`
 - `/api/agent/workspaces/{workspaceId}/llm-context`
-- `/api/agent/workspaces/{workspaceId}/proposals`
+- `GET|POST /api/agent/workspaces/{workspaceId}/proposals`
+- `POST /api/agent/workspaces/{workspaceId}/proposals/validate`
+- `GET /api/agent/workspaces/{workspaceId}/proposals/{proposalId}`
+- `POST /api/agent/workspaces/{workspaceId}/proposals/{proposalId}/apply`
+- `POST /api/agent/workspaces/{workspaceId}/proposals/{proposalId}/reject`
+
+Bearer tokens are accepted only under `/api/agent` and `/api/proposals`. Every other path, including
+workspace creation, requires Basic Auth.
 
 The full OpenAPI UI is available at `/api/docs` when the app is running.
 
@@ -617,7 +686,8 @@ The sample is intentionally anonymous and demonstrates a moderately complex C4 m
 - Structurizr merge import is deferred; create-new and replace are supported.
 - Diagram SVG/PNG export is frontend-only. Server-side diagram rendering is prepared conceptually but not implemented.
 - Basic Auth and seeded API tokens are available, but OIDC/SSO, user management, token creation UI, token rotation UI, and RBAC are deferred.
-- Agent proposals can be applied or rejected as a whole. Per-change accept/reject is not implemented yet.
+- Agent proposals can be applied or rejected as a whole, individually or in bulk. Per-change accept/reject is not implemented yet.
+- `created_by` and `updated_by` are written as `local-user` for every change. The audit columns exist but do not yet record the authenticated principal.
 - The agent API is deterministic and template-based; it does not invoke an LLM internally.
 - Codebase scanning is intentionally not implemented. External agents should analyze repositories outside YaC4e and submit evidence-backed proposals that reference files, classes, folders, commits, or URLs.
 - React Flow, ELK, and export tooling are loaded eagerly, so the production bundle is larger than it would be with route-level code splitting.

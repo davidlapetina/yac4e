@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsForViewport, renderSvgGraph, type SvgExportOptions } from '../../src/features/exports/exportService';
+import { boundsForViewport, ellipsize, renderSvgGraph, type SvgExportOptions } from '../../src/features/exports/exportService';
 
 const options: SvgExportOptions = {
   fileName: 'diagram.svg',
@@ -75,3 +75,29 @@ function stubRect(element: Element, rect: Omit<DOMRect, 'x' | 'y' | 'toJSON'>) {
     toJSON: () => ({})
   });
 }
+
+describe('relationship label clamping', () => {
+  it('leaves labels that already fit untouched', () => {
+    expect(ellipsize('Calls API', 132, 11)).toBe('Calls API');
+  });
+
+  it('ellipsizes a long description instead of letting it overflow the label box', () => {
+    const long = 'Writes reconciled settlement records to the ledger store after validating every batch';
+    const clamped = ellipsize(long, 132, 11);
+
+    expect(clamped.endsWith('…')).toBe(true);
+    expect(clamped.length).toBeLessThan(long.length);
+    expect(long.startsWith(clamped.slice(0, -1).trimEnd())).toBe(true);
+  });
+
+  it('scales the budget with the font size', () => {
+    const long = 'x'.repeat(200);
+
+    expect(ellipsize(long, 132, 11).length).toBeLessThan(ellipsize(long, 264, 11).length);
+    expect(ellipsize(long, 132, 22).length).toBeLessThan(ellipsize(long, 132, 11).length);
+  });
+
+  it('degrades safely at tiny widths', () => {
+    expect(ellipsize('Something long', 1, 11)).toBe('…');
+  });
+});

@@ -95,6 +95,7 @@ export interface LayoutPayload {
 export const api = {
   workspaces: () => request<Workspace[]>('/workspaces'),
   createWorkspace: (body: { name: string; description: string }) => request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(body) }),
+  updateWorkspace: (workspaceId: string, body: { name: string; description: string; version?: number }) => request<Workspace>(`/workspaces/${workspaceId}`, { method: 'PUT', body: JSON.stringify(body) }),
   elements: (workspaceId: string) => request<ArchitectureElement[]>(`/workspaces/${workspaceId}/elements`),
   createElement: (workspaceId: string, body: ElementInput) => request<ArchitectureElement>(`/workspaces/${workspaceId}/elements`, { method: 'POST', body: JSON.stringify(body) }),
   updateElement: (workspaceId: string, elementId: string, body: ElementInput) => request<ArchitectureElement>(`/workspaces/${workspaceId}/elements/${elementId}`, { method: 'PUT', body: JSON.stringify(body) }),

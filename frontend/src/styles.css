@@ -52,7 +52,7 @@ button:hover,
 
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(210px, 260px) minmax(240px, 1fr) repeat(7, auto) auto;
+  grid-template-columns: auto minmax(240px, 300px) minmax(240px, 1fr) repeat(7, auto) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -74,6 +74,58 @@ button:hover,
   border-radius: 6px;
   padding: 0 10px;
   background: #ffffff;
+}
+
+.workspace-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-picker select,
+.workspace-picker input {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #d4dbe7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.icon-action:hover:not(:disabled) {
+  background: #eef3fb;
+  color: #0f5e8c;
+}
+
+.icon-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workspace-rename-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  max-width: 320px;
+  padding: 4px 8px;
+  border: 1px solid #f0c2c2;
+  border-radius: 6px;
+  background: #fdf3f3;
+  color: #a12d2d;
+  font-size: 12px;
+  white-space: normal;
 }
 
 .file-label input {
@@ -360,6 +412,19 @@ button:hover,
   padding: 3px 7px;
   font-size: 11px;
   color: #344054;
+  /* Long relationship descriptions previously stretched across the diagram. Clamp to a
+     readable width; the full text stays available through the title tooltip. */
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.edge-label:hover {
+  max-width: 420px;
+  white-space: normal;
+  overflow: visible;
+  z-index: 6;
 }
 
 .right-panel .tabs {
@@ -706,9 +771,56 @@ textarea {
   white-space: normal;
 }
 
-.proposal-row.active {
+.proposal-row-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.proposal-row-shell > input[type='checkbox'] {
+  margin-top: 11px;
+}
+
+.proposal-row-shell .proposal-row {
+  min-width: 0;
+}
+
+.proposal-row-shell.active .proposal-row {
   border-color: #0f5e8c;
   background: #e9f4fb;
+}
+
+.proposal-count {
+  margin-left: 8px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.proposal-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.proposal-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475467;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.proposal-progress {
+  padding: 6px 10px;
+  border: 1px solid #cfe0f2;
+  border-radius: 6px;
+  background: #f2f8fd;
+  color: #0f5e8c;
+  font-size: 12px;
 }
 
 .proposal-row span,

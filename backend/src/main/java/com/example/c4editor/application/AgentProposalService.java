@@ -12,6 +12,7 @@ import com.example.c4editor.api.AgentProposalDtos.ProposalValidationIssue;
 import com.example.c4editor.api.AgentProposalDtos.ProposalValidationResult;
 import com.example.c4editor.api.AgentProposalDtos.RelationshipDraft;
 import com.example.c4editor.api.AgentProposalDtos.ViewDraft;
+import com.example.c4editor.api.AgentProposalDtos.ViewMemberDraft;
 import com.example.c4editor.api.ApiException;
 import com.example.c4editor.domain.AgentProposalChangeAction;
 import com.example.c4editor.domain.AgentProposalChangeStatus;
@@ -23,7 +24,9 @@ import com.example.c4editor.persistence.AgentProposalChangeEntity;
 import com.example.c4editor.persistence.AgentProposalEntity;
 import com.example.c4editor.persistence.ArchitectureElementEntity;
 import com.example.c4editor.persistence.ArchitectureRelationshipEntity;
+import com.example.c4editor.persistence.DiagramViewElementEntity;
 import com.example.c4editor.persistence.DiagramViewEntity;
+import com.example.c4editor.persistence.DiagramViewRelationshipEntity;
 import com.example.c4editor.persistence.ExternalLinkEntity;
 import com.example.c4editor.persistence.MetadataDefinitionEntity;
 import com.example.c4editor.persistence.WorkspaceEntity;
@@ -46,6 +49,8 @@ import java.util.UUID;
 @ApplicationScoped
 public class AgentProposalService {
     private static final int MAX_CHANGES = 200;
+    private static final int VIEW_LAYOUT_COLUMNS = 4;
+    private static final double VIEW_LAYOUT_GAP = 60;
 
     @Inject
     ObjectMapper objectMapper;
@@ -277,7 +282,73 @@ public class AgentProposalService {
         entity.layoutDirection = draft.layoutDirection() == null ? LayoutDirection.LEFT_TO_RIGHT : draft.layoutDirection();
         entity.settings = map(draft.settings());
         entity.persist();
+        addViewMembers(workspaceId, entity, draft, references);
         return entity.id;
+    }
+
+    /**
+     * Places the proposed elements on the view and, unless the draft opts out, connects them with
+     * every workspace relationship whose endpoints are both on the view. Without this a proposed
+     * view is persisted as an empty canvas.
+     */
+    private void addViewMembers(UUID workspaceId, DiagramViewEntity view, ViewDraft draft, Map<String, UUID> references) {
+        List<ViewMemberDraft> members = draft.elements() == null ? List.of() : draft.elements();
+        Set<UUID> placed = new LinkedHashSet<>();
+        int position = 0;
+        for (ViewMemberDraft member : members) {
+            if (member == null) {
+                continue;
+            }
+            UUID elementId = resolveElement(member.elementId(), member.elementReference(), references);
+            if (ArchitectureElementEntity.count("id = ?1 and workspaceId = ?2", elementId, workspaceId) == 0) {
+                throw new ApiException(Response.Status.BAD_REQUEST, "ELEMENT_NOT_FOUND",
+                        "View element does not belong to this workspace", Map.of("elementId", elementId));
+            }
+            // The (view_id, element_id) unique constraint makes duplicates a hard failure, so the
+            // first placement of an element wins and later repeats are skipped.
+            if (!placed.add(elementId)) {
+                continue;
+            }
+            DiagramViewElementEntity viewElement = new DiagramViewElementEntity();
+            viewElement.viewId = view.id;
+            viewElement.elementId = elementId;
+            viewElement.width = positive(member.width(), 260);
+            viewElement.height = positive(member.height(), 150);
+            viewElement.x = member.x() == null ? autoX(position, viewElement.width) : member.x();
+            viewElement.y = member.y() == null ? autoY(position, viewElement.height) : member.y();
+            viewElement.locked = Boolean.TRUE.equals(member.locked());
+            viewElement.visible = member.visible() == null || member.visible();
+            viewElement.zIndex = member.zIndex() == null ? position + 1 : member.zIndex();
+            viewElement.displaySettings = new LinkedHashMap<>();
+            viewElement.persist();
+            position++;
+        }
+        if (placed.isEmpty() || Boolean.FALSE.equals(draft.includeRelationships())) {
+            return;
+        }
+        for (ArchitectureRelationshipEntity relationship : ArchitectureRelationshipEntity.<ArchitectureRelationshipEntity>list("workspaceId", workspaceId)) {
+            if (!placed.contains(relationship.sourceElementId) || !placed.contains(relationship.targetElementId)) {
+                continue;
+            }
+            DiagramViewRelationshipEntity viewRelationship = new DiagramViewRelationshipEntity();
+            viewRelationship.viewId = view.id;
+            viewRelationship.relationshipId = relationship.id;
+            viewRelationship.visible = true;
+            viewRelationship.displaySettings = new LinkedHashMap<>();
+            viewRelationship.persist();
+        }
+    }
+
+    private static double positive(Double value, double fallback) {
+        return value == null || value <= 0 ? fallback : value;
+    }
+
+    private static double autoX(int position, double width) {
+        return (position % VIEW_LAYOUT_COLUMNS) * (width + VIEW_LAYOUT_GAP);
+    }
+
+    private static double autoY(int position, double height) {
+        return (position / VIEW_LAYOUT_COLUMNS) * (height + VIEW_LAYOUT_GAP);
     }
 
     private ProposalValidationResult validateRequest(UUID workspaceId, AgentProposalRequest request) {
@@ -306,7 +377,7 @@ public class AgentProposalService {
                 warnings.add(issue(Severity.WARNING, "MISSING_EVIDENCE", sequence, change.clientReference(),
                         "Proposal change has no evidence references", Map.of()));
             }
-            validateChange(workspaceId, sequence, change, projectedElements, references, errors);
+            validateChange(workspaceId, sequence, change, projectedElements, references, errors, warnings);
             if (change.action() == AgentProposalChangeAction.CREATE_ELEMENT && change.clientReference() != null && change.element() != null) {
                 projectedElements.put(change.clientReference(), change.element());
             }
@@ -333,7 +404,8 @@ public class AgentProposalService {
     }
 
     private void validateChange(UUID workspaceId, int sequence, AgentProposalChangeRequest change,
-            Map<String, ElementDraft> projectedElements, Set<String> references, List<ProposalValidationIssue> errors) {
+            Map<String, ElementDraft> projectedElements, Set<String> references, List<ProposalValidationIssue> errors,
+            List<ProposalValidationIssue> warnings) {
         switch (change.action()) {
             case CREATE_ELEMENT -> validateCreateElement(workspaceId, sequence, change, projectedElements, references, errors);
             case UPDATE_ELEMENT -> validateUpdateElement(workspaceId, sequence, change, projectedElements, references, errors);
@@ -341,7 +413,7 @@ public class AgentProposalService {
             case UPDATE_RELATIONSHIP -> validateUpdateRelationship(workspaceId, sequence, change, projectedElements, references, errors);
             case CREATE_LINK -> validateCreateLink(workspaceId, sequence, change, projectedElements, references, errors);
             case CREATE_METADATA_DEFINITION -> validateCreateMetadataDefinition(workspaceId, sequence, change, errors);
-            case CREATE_VIEW -> validateCreateView(workspaceId, sequence, change, projectedElements, references, errors);
+            case CREATE_VIEW -> validateCreateView(workspaceId, sequence, change, projectedElements, references, errors, warnings);
         }
     }
 
@@ -442,7 +514,8 @@ public class AgentProposalService {
     }
 
     private void validateCreateView(UUID workspaceId, int sequence, AgentProposalChangeRequest change,
-            Map<String, ElementDraft> projectedElements, Set<String> references, List<ProposalValidationIssue> errors) {
+            Map<String, ElementDraft> projectedElements, Set<String> references, List<ProposalValidationIssue> errors,
+            List<ProposalValidationIssue> warnings) {
         ViewDraft draft = change.view();
         if (draft == null) {
             errors.add(issue(Severity.ERROR, "MISSING_VIEW", sequence, change.clientReference(), "Diagram view draft is required", Map.of()));
@@ -453,6 +526,34 @@ public class AgentProposalService {
         }
         if (draft.scopeElementId() != null || draft.scopeReference() != null) {
             validateEndpoint(workspaceId, sequence, change.clientReference(), "scope", draft.scopeElementId(), draft.scopeReference(), references, errors);
+        }
+        validateViewMembers(workspaceId, sequence, change, draft, references, errors, warnings);
+    }
+
+    private void validateViewMembers(UUID workspaceId, int sequence, AgentProposalChangeRequest change, ViewDraft draft,
+            Set<String> references, List<ProposalValidationIssue> errors, List<ProposalValidationIssue> warnings) {
+        List<ViewMemberDraft> members = draft.elements() == null ? List.of() : draft.elements();
+        if (members.isEmpty()) {
+            warnings.add(issue(Severity.WARNING, "EMPTY_VIEW", sequence, change.clientReference(),
+                    "View has no elements and will be created as an empty diagram", Map.of()));
+            return;
+        }
+        Set<String> seen = new LinkedHashSet<>();
+        int index = 0;
+        for (ViewMemberDraft member : members) {
+            if (member == null) {
+                errors.add(issue(Severity.ERROR, "INVALID_VIEW_ELEMENT", sequence, change.clientReference(),
+                        "View element entry is empty", Map.of("index", index)));
+                index++;
+                continue;
+            }
+            validateEndpoint(workspaceId, sequence, change.clientReference(), "view element", member.elementId(), member.elementReference(), references, errors);
+            String key = member.elementId() != null ? member.elementId().toString() : member.elementReference();
+            if (key != null && !seen.add(key)) {
+                warnings.add(issue(Severity.WARNING, "DUPLICATE_VIEW_ELEMENT", sequence, change.clientReference(),
+                        "Element appears more than once on the view and will be placed once", Map.of("element", key)));
+            }
+            index++;
         }
     }
 

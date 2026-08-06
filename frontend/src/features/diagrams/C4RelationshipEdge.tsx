@@ -19,7 +19,12 @@ export function C4RelationshipEdge(props: EdgeProps<Edge<C4EdgeData>>) {
         data-relationship-label={props.data?.label ?? ''}
       />
       <EdgeLabelRenderer>
-        <div className="edge-label" data-c4-edge-label={props.id} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
+        <div
+          className="edge-label"
+          data-c4-edge-label={props.id}
+          title={props.data?.label}
+          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
           {props.data?.label}
         </div>
       </EdgeLabelRenderer>

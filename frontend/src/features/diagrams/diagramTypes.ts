@@ -6,6 +6,8 @@ export interface C4NodeData extends Record<string, unknown> {
   warningCount: number;
   linkCount: number;
   highlighted: boolean;
+  locked: boolean;
+  zIndex: number;
 }
 
 export interface C4EdgeData extends Record<string, unknown> {

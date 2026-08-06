@@ -138,10 +138,23 @@ function renderSvgEdges(viewport: HTMLElement, bounds: ReturnType<typeof boundsF
       const label = path.dataset.relationshipLabel || path.dataset.relationshipType || '';
       const midX = (source.x + target.x) / 2;
       const midY = (source.y + target.y) / 2;
-      const labelSvg = options.includeRelationshipLabels && label ? `<rect x="${midX - 70 * options.scale}" y="${midY - 14 * options.scale}" width="${140 * options.scale}" height="${24 * options.scale}" rx="${5 * options.scale}" fill="#ffffff" stroke="#d7e0ec"/><text x="${midX}" y="${midY + 4 * options.scale}" text-anchor="middle" font-family="Inter, Arial" font-size="${11 * options.scale}" fill="#334155">${escapeXml(label)}</text>` : '';
+      const clampedLabel = ellipsize(label, 132 * options.scale, 11 * options.scale);
+      const labelSvg = options.includeRelationshipLabels && label ? `<rect x="${midX - 70 * options.scale}" y="${midY - 14 * options.scale}" width="${140 * options.scale}" height="${24 * options.scale}" rx="${5 * options.scale}" fill="#ffffff" stroke="#d7e0ec"/><text x="${midX}" y="${midY + 4 * options.scale}" text-anchor="middle" font-family="Inter, Arial" font-size="${11 * options.scale}" fill="#334155"><title>${escapeXml(label)}</title>${escapeXml(clampedLabel)}</text>` : '';
       return `<g data-export-relationship-id="${escapeXml(path.dataset.edgeId ?? '')}"><line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" stroke="#475569" stroke-width="${2 * options.scale}" marker-end="url(#arrow)"/>${labelSvg}</g>`;
     })
     .join('');
+}
+
+/**
+ * Clamps a single-line label to the width it is drawn into. The relationship label box is a fixed
+ * size, so an unclamped description spilled out of it and across neighbouring shapes.
+ */
+export function ellipsize(value: string, maxWidth: number, fontSize: number) {
+  const approximateCharWidth = fontSize * 0.55;
+  const maxChars = Math.max(1, Math.floor(maxWidth / approximateCharWidth));
+  if (value.length <= maxChars) return value;
+  if (maxChars === 1) return '…';
+  return `${value.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
 function wrapText(value: string, maxWidth: number, fontSize: number) {
