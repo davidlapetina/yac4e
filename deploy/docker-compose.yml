@@ -1,0 +1,59 @@
+# Deployment stack for YaC4e. Values come from the .env file created by start.sh.
+# Run through deploy/start.sh and deploy/stop.sh rather than directly.
+
+name: yac4e
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: yac4e-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - yac4e-pgdata:/var/lib/postgresql/data
+    # Not published to the host: only the app needs it, over the compose network.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: yac4e:local
+    container_name: yac4e-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HTTP_PORT: "8080"
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DATABASE_USERNAME: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      YAC4E_AUTH_ENABLED: "true"
+      YAC4E_BASIC_USERNAME: ${YAC4E_BASIC_USERNAME}
+      YAC4E_BASIC_PASSWORD: ${YAC4E_BASIC_PASSWORD}
+      YAC4E_SEED_AGENT_TOKEN_ENABLED: "true"
+      YAC4E_SEED_AGENT_TOKEN: ${YAC4E_SEED_AGENT_TOKEN}
+      YAC4E_SEED_AGENT_TOKEN_NAME: "Deployment agent token"
+      YAC4E_SEED_AGENT_TOKEN_PRINCIPAL_ID: "deploy-agent"
+    ports:
+      - "${YAC4E_PORT:-8080}:8080"
+    healthcheck:
+      # The API requires auth, so probe with the configured Basic credentials.
+      test: ["CMD-SHELL", "curl -fsS -u \"$$YAC4E_BASIC_USERNAME:$$YAC4E_BASIC_PASSWORD\" http://localhost:8080/api/workspaces > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  yac4e-pgdata:

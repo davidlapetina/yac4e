@@ -33,6 +33,7 @@ coverage/
 .env
 .env.*
 !.env.example
+deploy/.env
 *.local
 local.properties
 *.pem
