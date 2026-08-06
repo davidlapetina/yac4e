@@ -29,6 +29,9 @@ interface EditorState {
   highlight: (id?: string) => void;
   setSaveStatus: (status: SaveStatus) => void;
   setMode: (mode: EditorMode) => void;
+  toggleLeftPanel: () => void;
+  toggleRightPanel: () => void;
+  toggleBottomPanel: () => void;
   pushHistory: (snapshot: DiagramSnapshot) => void;
   undo: (current: DiagramSnapshot) => DiagramSnapshot | undefined;
   redo: (current: DiagramSnapshot) => DiagramSnapshot | undefined;
@@ -40,7 +43,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   mode: 'select',
   leftPanelOpen: true,
   rightPanelOpen: true,
-  bottomPanelOpen: true,
+  // The validation issue list starts collapsed; the summary bar is always visible.
+  bottomPanelOpen: false,
   undoStack: [],
   redoStack: [],
   setWorkspace: (workspaceId) => set({ currentWorkspaceId: workspaceId, currentViewId: undefined, selectedElementId: undefined, selectedRelationshipId: undefined }),
@@ -50,6 +54,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   highlight: (id) => set({ highlightedId: id }),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
   setMode: (mode) => set({ mode }),
+  toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
+  toggleRightPanel: () => set((state) => ({ rightPanelOpen: !state.rightPanelOpen })),
+  toggleBottomPanel: () => set((state) => ({ bottomPanelOpen: !state.bottomPanelOpen })),
   pushHistory: (snapshot) =>
     set((state) => ({
       undoStack: [...state.undoStack, snapshot].slice(-100),

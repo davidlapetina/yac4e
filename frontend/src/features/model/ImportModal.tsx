@@ -1,6 +1,7 @@
 import { FileInput, Upload, X } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { ModalShell } from '../../components/ModalShell';
 import { api } from '../../api/client';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ImportPreview, Workspace } from '../../types/model';
@@ -56,8 +57,7 @@ export function ImportModal({ open, onClose, workspaces, currentWorkspaceId }: P
   const canConfirm = format !== 'STRUCTURIZR_DSL' || (preview?.valid && file);
 
   return (
-    <div className="modal-backdrop">
-      <section className="import-modal">
+    <ModalShell className="import-modal" label="Import model" onClose={onClose} dismissible={!importMutation.isPending}>
         <header>
           <h2>Import</h2>
           <button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button>
@@ -81,8 +81,7 @@ export function ImportModal({ open, onClose, workspaces, currentWorkspaceId }: P
         {validateStructurizr.error && <div className="form-error">{String(validateStructurizr.error.message)}</div>}
         {importMutation.error && <div className="form-error">{String(importMutation.error.message)}</div>}
         <button type="button" className="primary-action" disabled={!file || !canConfirm} onClick={() => importMutation.mutate()}><Upload size={15} /> Confirm import</button>
-      </section>
-    </div>
+    </ModalShell>
   );
 }
 

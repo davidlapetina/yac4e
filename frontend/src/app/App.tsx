@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileInput, GitPullRequestArrow, Layers3, Plus, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
+import { PanelRail } from '../components/PanelRail';
 import { DiagramCanvas } from '../features/diagrams/DiagramCanvas';
 import { ExportModal } from '../features/exports/ExportModal';
 import { ModelExplorer } from '../features/model/ModelExplorer';
@@ -103,8 +104,12 @@ export function App() {
         <button type="button" onClick={() => createWorkspace.mutate()} title="Create workspace"><Plus size={15} /> Workspace</button>
         <span className={`save-status ${store.saveStatus}`}>{store.saveStatus}</span>
       </header>
-      <div className="editor-grid">
-        <ModelExplorer workspaceId={workspaceId} elements={elements.data ?? []} views={views.data ?? []} currentView={currentView} issues={allIssues} />
+      <div className={`editor-grid ${store.leftPanelOpen ? '' : 'left-collapsed'} ${store.rightPanelOpen ? '' : 'right-collapsed'}`}>
+        {store.leftPanelOpen ? (
+          <ModelExplorer workspaceId={workspaceId} elements={elements.data ?? []} views={views.data ?? []} currentView={currentView} issues={allIssues} />
+        ) : (
+          <PanelRail side="left" label="Model" badge={elements.data?.length} onExpand={store.toggleLeftPanel} />
+        )}
         {currentView ? (
           <ReactFlowProvider>
             <DiagramCanvas
@@ -119,13 +124,17 @@ export function App() {
         ) : (
           <section className="canvas-shell empty-state">Create a diagram view to start modeling.</section>
         )}
-        <PropertiesPanel
-          workspaceId={workspaceId}
-          elements={elements.data ?? []}
-          relationships={relationships.data ?? []}
-          metadataDefinitions={metadataDefinitions.data ?? []}
-          issues={allIssues}
-        />
+        {store.rightPanelOpen ? (
+          <PropertiesPanel
+            workspaceId={workspaceId}
+            elements={elements.data ?? []}
+            relationships={relationships.data ?? []}
+            metadataDefinitions={metadataDefinitions.data ?? []}
+            issues={allIssues}
+          />
+        ) : (
+          <PanelRail side="right" label="Properties" onExpand={store.toggleRightPanel} />
+        )}
       </div>
       <ValidationPanel issues={allIssues} />
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} viewName={currentView?.name ?? 'diagram'} />

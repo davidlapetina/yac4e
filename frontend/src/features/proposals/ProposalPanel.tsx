@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, GitPullRequestArrow, RefreshCw, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { ModalShell } from '../../components/ModalShell';
 import { api } from '../../api/client';
 import type { AgentProposal, AgentProposalSummary, Metadata } from '../../types/model';
 
@@ -129,8 +130,7 @@ export function ProposalPanel({ open, workspaceId, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
-      <section className="proposal-modal">
+    <ModalShell className="proposal-modal" label="Agent proposals" onClose={onClose} dismissible={!busy}>
         <header>
           <h2>
             <GitPullRequestArrow size={18} /> Proposals
@@ -197,8 +197,7 @@ export function ProposalPanel({ open, workspaceId, onClose }: Props) {
             <Check size={15} /> Apply{applicable.length > 1 ? ` ${applicable.length}` : ''}
           </button>
         </footer>
-      </section>
-    </div>
+    </ModalShell>
   );
 }
 

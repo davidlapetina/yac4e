@@ -1,5 +1,6 @@
 import { Download, X } from 'lucide-react';
 import { useState } from 'react';
+import { ModalShell } from '../../components/ModalShell';
 import { diagramExportService, downloadBlob, type PngExportOptions, type SvgExportOptions } from './exportService';
 
 interface Props {
@@ -38,8 +39,7 @@ export function ExportModal({ open, onClose, viewName }: Props) {
   }
 
   return (
-    <div className="modal-backdrop">
-      <section className="export-modal">
+    <ModalShell className="export-modal" label="Export diagram" onClose={onClose}>
         <header>
           <h2>Export</h2>
           <button className="icon-button" onClick={onClose} title="Close"><X size={16} /></button>
@@ -60,8 +60,7 @@ export function ExportModal({ open, onClose, viewName }: Props) {
         </div>
         <label>Resolution<select value={resolution} onChange={(event) => setResolution(Number(event.target.value))}><option value={1}>1x</option><option value={2}>2x</option><option value={4}>4x</option></select></label>
         <button className="primary-action" onClick={runExport}><Download size={15} /> Export {format}</button>
-      </section>
-    </div>
+    </ModalShell>
   );
 }
 

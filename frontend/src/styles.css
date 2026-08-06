@@ -153,6 +153,53 @@ button:hover,
   min-height: 0;
 }
 
+/* A collapsed panel keeps a narrow rail so it can be brought back. */
+.editor-grid.left-collapsed {
+  grid-template-columns: 40px minmax(620px, 1fr) 360px;
+}
+
+.editor-grid.right-collapsed {
+  grid-template-columns: 280px minmax(620px, 1fr) 40px;
+}
+
+.editor-grid.left-collapsed.right-collapsed {
+  grid-template-columns: 40px minmax(620px, 1fr) 40px;
+}
+
+.panel-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  background: #f8fafc;
+  border-right: 1px solid #dbe2ef;
+  overflow: hidden;
+}
+
+.panel-rail.right {
+  border-right: 0;
+  border-left: 1px solid #dbe2ef;
+}
+
+.panel-rail-label {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+}
+
+.panel-rail.left .panel-rail-label {
+  transform: rotate(180deg);
+}
+
 .left-panel,
 .right-panel {
   overflow: auto;
@@ -169,6 +216,10 @@ button:hover,
   position: sticky;
   top: 0;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 12px 14px;
   font-weight: 700;
   background: #ffffff;
@@ -183,11 +234,55 @@ button:hover,
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   color: #667085;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   margin: 6px 4px;
+}
+
+.section-title > span:first-child {
+  margin-right: auto;
+}
+
+.section-count {
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: #eef2f8;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.section-hint {
+  margin: 0 4px 4px;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.explorer-filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 4px 8px;
+  padding: 0 8px;
+  border: 1px solid #d4dbe7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #667085;
+}
+
+.explorer-filter input {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
 }
 
 .tree-row {
@@ -577,11 +672,97 @@ textarea {
 .validation-panel {
   border-top: 1px solid #dbe2ef;
   background: #ffffff;
+  display: grid;
+  min-height: 0;
+  padding: 3px 10px;
+}
+
+.validation-panel.expanded {
+  max-height: 42vh;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.validation-bar {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.validation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid #d4dbe7;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475467;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.validation-toggle:hover {
+  background: #eef3fb;
+  color: #0f5e8c;
+}
+
+.validation-list {
+  margin: 6px 0 4px;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
   min-height: 0;
-  padding: 3px 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.validation-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.validation-row:hover {
+  background: #f4f8fd;
+  border-color: #dbe2ef;
+}
+
+.validation-row.error {
+  color: #b42318;
+}
+
+.validation-row.warning {
+  color: #a86400;
+}
+
+.validation-row.info {
+  color: #475467;
+}
+
+.validation-code {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #667085;
+  white-space: nowrap;
+}
+
+.validation-message {
+  color: #344054;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .validation-summary {
@@ -653,6 +834,33 @@ textarea {
 
 .search-box input {
   min-width: 0;
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+}
+
+.search-clear:hover {
+  background: #eef3fb;
+  color: #0f5e8c;
+}
+
+.search-results-header {
+  padding: 2px 6px 6px;
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .search-results {

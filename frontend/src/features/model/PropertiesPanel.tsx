@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, AlertTriangle, Info, Link2, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info, Link2, PanelRightClose, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../../api/client';
@@ -25,7 +25,19 @@ export function PropertiesPanel({ workspaceId, elements, relationships, metadata
   );
   return (
     <aside className="right-panel">
-      <div className="panel-title">Properties</div>
+      <div className="panel-title">
+        <span>Properties</span>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={store.toggleRightPanel}
+          title="Collapse properties panel"
+          aria-label="Collapse properties panel"
+          aria-expanded
+        >
+          <PanelRightClose size={15} />
+        </button>
+      </div>
       {selectedIssues.length > 0 && <SelectedValidationIssues issues={selectedIssues} />}
       {element && <ElementProperties workspaceId={workspaceId} element={element} elements={elements} definitions={metadataDefinitions} />}
       {relationship && <RelationshipProperties workspaceId={workspaceId} relationship={relationship} elements={elements} />}
