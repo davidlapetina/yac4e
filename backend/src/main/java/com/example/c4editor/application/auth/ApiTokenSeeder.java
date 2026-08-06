@@ -33,9 +33,22 @@ public class ApiTokenSeeder {
     @Transactional
     void seed(@Observes StartupEvent event) {
         if (!seedEnabled || seedToken == null || seedToken.isBlank()) {
+            // Turning seeding off has to revoke what was seeded before, otherwise the previously
+            // issued token keeps working and the setting achieves nothing.
+            long revoked = ApiTokenEntity.delete("principalId", seedPrincipalId);
+            if (revoked > 0) {
+                LOG.infof("Seeding disabled: revoked %d seeded API token(s) for principal '%s'", revoked, seedPrincipalId);
+            }
             return;
         }
         String tokenHash = authService.tokenHash(seedToken);
+        // Rotating the configured token must revoke the previous one. Seeding previously only
+        // skipped when the new hash already existed, so every change appended a row and left the
+        // superseded token valid indefinitely.
+        long revoked = ApiTokenEntity.delete("principalId = ?1 and tokenHash <> ?2", seedPrincipalId, tokenHash);
+        if (revoked > 0) {
+            LOG.infof("Revoked %d superseded API token(s) for principal '%s'", revoked, seedPrincipalId);
+        }
         if (ApiTokenEntity.find("tokenHash", tokenHash).firstResult() != null) {
             return;
         }
