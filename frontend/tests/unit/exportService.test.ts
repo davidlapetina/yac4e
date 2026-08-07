@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { boundsForViewport, ellipsize, renderSvgGraph, type SvgExportOptions } from '../../src/features/exports/exportService';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { boundsForViewport, ellipsize, renderSvgGraph, viewportZoom, type SvgExportOptions } from '../../src/features/exports/exportService';
 
 const options: SvgExportOptions = {
   fileName: 'diagram.svg',
@@ -75,6 +75,70 @@ function stubRect(element: Element, rect: Omit<DOMRect, 'x' | 'y' | 'toJSON'>) {
     toJSON: () => ({})
   });
 }
+
+describe('zoom independence', () => {
+  function viewportWithNodes(zoom: number) {
+    const viewport = document.createElement('div');
+    viewport.className = 'react-flow__viewport';
+    stubRect(viewport, { left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 });
+    vi.stubGlobal('getComputedStyle', () => ({ transform: `matrix(${zoom}, 0, 0, ${zoom}, 0, 0)` }));
+
+    // Two 260x150 nodes at diagram coords (0,0) and (400,300), as the browser would report them
+    // after the viewport scale transform is applied.
+    for (const [x, y] of [[0, 0], [400, 300]]) {
+      const node = document.createElement('div');
+      node.className = 'react-flow__node';
+      stubRect(node, {
+        left: x * zoom, top: y * zoom,
+        right: (x + 260) * zoom, bottom: (y + 150) * zoom,
+        width: 260 * zoom, height: 150 * zoom
+      });
+      viewport.appendChild(node);
+    }
+    return viewport;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads the scale out of the viewport transform', () => {
+    vi.stubGlobal('getComputedStyle', () => ({ transform: 'matrix(0.5, 0, 0, 0.5, 120, 40)' }));
+    expect(viewportZoom(document.createElement('div'))).toBe(0.5);
+
+    vi.stubGlobal('getComputedStyle', () => ({ transform: 'none' }));
+    expect(viewportZoom(document.createElement('div'))).toBe(1);
+  });
+
+  it('produces the same diagram bounds whatever the zoom', () => {
+    const atFullZoom = boundsForViewport(viewportWithNodes(1), 0);
+    const zoomedOut = boundsForViewport(viewportWithNodes(0.4), 0);
+    const zoomedIn = boundsForViewport(viewportWithNodes(2.5), 0);
+
+    // 400 + 260 wide, 300 + 150 tall, in diagram units.
+    expect(atFullZoom).toMatchObject({ x: 0, y: 0, width: 660, height: 450 });
+    expect(zoomedOut).toMatchObject(atFullZoom);
+    expect(zoomedIn).toMatchObject(atFullZoom);
+  });
+
+  it('covers nodes lying outside the visible viewport', () => {
+    const viewport = viewportWithNodes(1);
+    const offscreen = document.createElement('div');
+    offscreen.className = 'react-flow__node';
+    // Far to the right and below anything on screen.
+    stubRect(offscreen, { left: 3000, top: 2000, right: 3260, bottom: 2150, width: 260, height: 150 });
+    viewport.appendChild(offscreen);
+
+    const bounds = boundsForViewport(viewport, 0);
+
+    expect(bounds.width).toBe(3260);
+    expect(bounds.height).toBe(2150);
+  });
+
+  it('applies the margin around the full extent', () => {
+    const bounds = boundsForViewport(viewportWithNodes(1), 48);
+
+    expect(bounds).toMatchObject({ x: -48, y: -48, width: 660 + 96, height: 450 + 96 });
+  });
+});
 
 describe('relationship label clamping', () => {
   it('leaves labels that already fit untouched', () => {

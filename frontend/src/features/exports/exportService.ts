@@ -1,5 +1,3 @@
-import { toPng } from 'html-to-image';
-
 export interface SvgExportOptions {
   fileName: string;
   background: 'white' | 'transparent';
@@ -22,8 +20,8 @@ export interface DiagramExportService {
 }
 
 class DomDiagramExportService implements DiagramExportService {
-  async exportSvg(options: SvgExportOptions): Promise<Blob> {
-    await document.fonts.ready;
+  /** Builds the complete diagram once, so SVG and PNG can never disagree. */
+  private render(options: SvgExportOptions) {
     const viewport = diagramViewport();
     const bounds = boundsForViewport(viewport, options.margin);
     const width = Math.max(1, bounds.width * options.scale);
@@ -32,27 +30,63 @@ class DomDiagramExportService implements DiagramExportService {
     const body = renderSvgGraph(viewport, bounds, options);
     const legend = options.includeLegend ? `<text x="16" y="${height - 16}" font-family="Inter, Arial" font-size="12" fill="#475569">YaC4e C4 diagram export</text>` : '';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>${background}${body}${legend}</svg>`;
+    return { svg, width, height };
+  }
+
+  async exportSvg(options: SvgExportOptions): Promise<Blob> {
+    await fontsReady();
+    const { svg } = this.render(options);
     return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   }
 
   async exportPng(options: PngExportOptions): Promise<Blob> {
-    await document.fonts.ready;
-    const viewport = diagramViewport();
-    const bounds = boundsForViewport(viewport, options.margin);
-    const dataUrl = await toPng(viewport, {
-      cacheBust: true,
-      pixelRatio: Math.max(2, options.pixelRatio),
-      backgroundColor: options.background === 'white' ? '#ffffff' : undefined,
-      width: bounds.width,
-      height: bounds.height,
-      style: {
-        transform: `translate(${-bounds.x}px, ${-bounds.y}px) scale(${options.scale})`,
-        transformOrigin: 'top left'
-      }
-    });
-    const response = await fetch(dataUrl);
-    return response.blob();
+    await fontsReady();
+    // Rasterise the exported SVG rather than screenshotting the live DOM. Screenshotting had to
+    // override the viewport's own pan/zoom transform, which cropped everything outside the
+    // visible area, so the PNG never matched the SVG or the full diagram.
+    const { svg, width, height } = this.render(options);
+    return rasterize(svg, width, height, Math.max(1, options.pixelRatio), options.background === 'white' ? '#ffffff' : undefined);
   }
+}
+
+async function fontsReady() {
+  try {
+    await document.fonts?.ready;
+  } catch {
+    // Font loading status is unavailable in some environments; exporting can still proceed.
+  }
+}
+
+function rasterize(svg: string, width: number, height: number, pixelRatio: number, background?: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * pixelRatio));
+        canvas.height = Math.max(1, Math.round(height * pixelRatio));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Could not create a canvas to render the PNG'));
+          return;
+        }
+        if (background) {
+          context.fillStyle = background;
+          context.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not encode the PNG'))), 'image/png');
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not render the diagram to an image'));
+    };
+    image.src = url;
+  });
 }
 
 export const diagramExportService: DiagramExportService = new DomDiagramExportService();
@@ -66,17 +100,44 @@ export function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Current zoom of the React Flow viewport.
+ *
+ * Every measurement below comes from getBoundingClientRect, which reports screen pixels after the
+ * viewport's scale transform. Dividing by the zoom converts back to diagram coordinates so an
+ * export is identical no matter how far the user happened to be zoomed in or out.
+ */
+export function viewportZoom(viewport: HTMLElement) {
+  const transform = typeof getComputedStyle === 'function' ? getComputedStyle(viewport).transform : '';
+  const match = /matrix3d\(([^)]+)\)|matrix\(([^)]+)\)/.exec(transform ?? '');
+  if (!match) return 1;
+  const scale = Number((match[1] ?? match[2]).split(',')[0]);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/** Rect of an element in diagram coordinates, relative to the viewport origin. */
+function flowRect(element: HTMLElement, origin: DOMRect, zoom: number) {
+  const rect = element.getBoundingClientRect();
+  return {
+    x: (rect.left - origin.left) / zoom,
+    y: (rect.top - origin.top) / zoom,
+    width: rect.width / zoom,
+    height: rect.height / zoom
+  };
+}
+
 export function boundsForViewport(viewport: HTMLElement, margin: number) {
   const nodes = Array.from(viewport.querySelectorAll<HTMLElement>('.react-flow__node:not([data-hidden="true"])'));
   if (nodes.length === 0) {
     return { x: 0, y: 0, width: viewport.clientWidth || 800, height: viewport.clientHeight || 600 };
   }
-  const viewportRect = viewport.getBoundingClientRect();
-  const rects = nodes.map((node) => node.getBoundingClientRect());
-  const minX = Math.min(...rects.map((rect) => rect.left)) - viewportRect.left - margin;
-  const minY = Math.min(...rects.map((rect) => rect.top)) - viewportRect.top - margin;
-  const maxX = Math.max(...rects.map((rect) => rect.right)) - viewportRect.left + margin;
-  const maxY = Math.max(...rects.map((rect) => rect.bottom)) - viewportRect.top + margin;
+  const origin = viewport.getBoundingClientRect();
+  const zoom = viewportZoom(viewport);
+  const rects = nodes.map((node) => flowRect(node, origin, zoom));
+  const minX = Math.min(...rects.map((rect) => rect.x)) - margin;
+  const minY = Math.min(...rects.map((rect) => rect.y)) - margin;
+  const maxX = Math.max(...rects.map((rect) => rect.x + rect.width)) + margin;
+  const maxY = Math.max(...rects.map((rect) => rect.y + rect.height)) + margin;
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
@@ -88,10 +149,10 @@ export function renderSvgGraph(viewport: HTMLElement, bounds: ReturnType<typeof 
 }
 
 function renderSvgNode(node: HTMLElement, viewport: HTMLElement, bounds: ReturnType<typeof boundsForViewport>, options: SvgExportOptions) {
-  const viewportRect = viewport.getBoundingClientRect();
-  const rect = node.getBoundingClientRect();
-  const x = (rect.left - viewportRect.left - bounds.x) * options.scale;
-  const y = (rect.top - viewportRect.top - bounds.y) * options.scale;
+  const origin = viewport.getBoundingClientRect();
+  const rect = flowRect(node, origin, viewportZoom(viewport));
+  const x = (rect.x - bounds.x) * options.scale;
+  const y = (rect.y - bounds.y) * options.scale;
   const width = rect.width * options.scale;
   const height = rect.height * options.scale;
   const type = node.dataset.elementType ?? '';
@@ -122,12 +183,13 @@ function renderSvgNode(node: HTMLElement, viewport: HTMLElement, bounds: ReturnT
 
 function renderSvgEdges(viewport: HTMLElement, bounds: ReturnType<typeof boundsForViewport>, options: SvgExportOptions) {
   const nodeCenters = new Map<string, { x: number; y: number }>();
-  const viewportRect = viewport.getBoundingClientRect();
+  const origin = viewport.getBoundingClientRect();
+  const zoom = viewportZoom(viewport);
   for (const node of Array.from(viewport.querySelectorAll<HTMLElement>('.react-flow__node:not([data-hidden="true"]) [data-c4-node="true"]'))) {
-    const rect = node.getBoundingClientRect();
+    const rect = flowRect(node, origin, zoom);
     nodeCenters.set(node.dataset.elementId ?? '', {
-      x: (rect.left - viewportRect.left - bounds.x + rect.width / 2) * options.scale,
-      y: (rect.top - viewportRect.top - bounds.y + rect.height / 2) * options.scale
+      x: (rect.x - bounds.x + rect.width / 2) * options.scale,
+      y: (rect.y - bounds.y + rect.height / 2) * options.scale
     });
   }
   return Array.from(viewport.querySelectorAll<SVGPathElement>('path.c4-edge'))
