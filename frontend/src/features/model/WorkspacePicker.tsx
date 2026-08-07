@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Pencil, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ApiClientError, api } from '../../api/client';
+import { CopyableId } from '../../components/CopyableId';
 import type { Workspace } from '../../types/model';
 
 interface Props {
@@ -74,6 +75,7 @@ export function WorkspacePicker({ workspaces, workspaceId, onSelect }: Props) {
         <button type="button" className="icon-action" onClick={startRename} title="Rename workspace" aria-label="Rename workspace">
           <Pencil size={14} />
         </button>
+        <CopyableId value={workspaceId} label="workspace ID" />
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { AlertCircle, AlertTriangle, Info, Link2, PanelRightClose, Plus, Save, T
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { api } from '../../api/client';
+import { CopyableId } from '../../components/CopyableId';
 import { useEditorStore } from '../../stores/editorStore';
 import type { ArchitectureElement, ArchitectureRelationship, MetadataDefinition, ValidationIssue } from '../../types/model';
 import { elementFormSchema, linkFormSchema, type ElementFormValues, type LinkFormValues } from '../../validation/schemas';
@@ -142,6 +143,10 @@ function ElementProperties({ workspaceId, element, elements, definitions }: { wo
       {elementForm.formState.isDirty && <div className="unsaved-warning">Unsaved property changes</div>}
       {tab === 'General' && (
         <div className="form-grid">
+          <div className="id-row">
+            <span>Element ID</span>
+            <CopyableId value={element.id} label="element ID" showValue />
+          </div>
           <label>Name<input {...elementForm.register('name')} /></label>
           <label>Type<select {...elementForm.register('type')}>{['PERSON', 'SOFTWARE_SYSTEM', 'CONTAINER', 'COMPONENT', 'DATA_STORE', 'EXTERNAL_SYSTEM'].map((type) => <option key={type}>{type}</option>)}</select></label>
           <label>Description<textarea {...elementForm.register('description')} /></label>
@@ -297,6 +302,10 @@ function RelationshipProperties({ workspaceId, relationship, elements }: { works
     <div className="properties-form">
       <div className="tabs"><button className="active">Relationship</button></div>
       <div className="form-grid">
+        <div className="id-row">
+          <span>Relationship ID</span>
+          <CopyableId value={relationship.id} label="relationship ID" showValue />
+        </div>
         <label>Source<select value={form.sourceElementId} onChange={(event) => setForm({ ...form, sourceElementId: event.target.value })}>{elementOptions}</select></label>
         <label>Target<select value={form.targetElementId} onChange={(event) => setForm({ ...form, targetElementId: event.target.value })}>{elementOptions}</select></label>
         <label>Type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as ArchitectureRelationship['type'] })}>{['USES', 'CALLS', 'READS_FROM', 'WRITES_TO', 'PUBLISHES_TO', 'SUBSCRIBES_TO', 'DEPENDS_ON', 'OWNS', 'AUTHENTICATES_WITH'].map((type) => <option key={type}>{type}</option>)}</select></label>
