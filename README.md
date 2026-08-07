@@ -55,7 +55,7 @@ External agents can submit evidence-backed proposals. The UI provides a human re
 
 - Backend: Java 21, Quarkus, Hibernate ORM with Panache, Flyway, PostgreSQL, SmallRye OpenAPI
 - Frontend: React 19, TypeScript, React Flow, ELK.js, Zustand, TanStack Query, React Hook Form, Zod
-- Import/export: Jackson JSON/YAML, Structurizr DSL Java library, html-to-image
+- Import/export: Jackson JSON/YAML, Structurizr DSL Java library, browser canvas rasterisation for PNG
 - Tests: JUnit 5, REST Assured, Vitest, React Testing Library setup, Playwright
 - Build: Maven reactor build with frontend build integration
 
