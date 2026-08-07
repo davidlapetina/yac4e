@@ -501,6 +501,42 @@ Proposal JSON shape:
       ]
     },
     {
+      "action": "CREATE_ELEMENT",
+      "clientReference": "service_db",
+      "element": {
+        "type": "DATA_STORE",
+        "name": "Service Store",
+        "description": "Stores service state.",
+        "parentReference": "service_api",
+        "technology": "PostgreSQL"
+      },
+      "evidence": [
+        {
+          "kind": "BUILD_FILE",
+          "path": "services/api/src/main/resources/application.properties"
+        }
+      ]
+    },
+    {
+      "action": "CREATE_RELATIONSHIP",
+      "clientReference": "api_writes_db",
+      "relationship": {
+        "sourceReference": "service_api",
+        "targetReference": "service_db",
+        "type": "WRITES_TO",
+        "description": "Persists service state.",
+        "technology": "JDBC",
+        "protocol": "TCP"
+      },
+      "evidence": [
+        {
+          "kind": "CLASS",
+          "path": "services/api/src/main/java/com/example/ApiRepository.java",
+          "symbol": "ApiRepository"
+        }
+      ]
+    },
+    {
       "action": "CREATE_LINK",
       "link": {
         "elementReference": "service_api",
@@ -530,7 +566,8 @@ Proposal JSON shape:
         "scopeElementId": "{existingSoftwareSystemId}",
         "layoutDirection": "LEFT_TO_RIGHT",
         "elements": [
-          { "elementReference": "service_api" }
+          { "elementReference": "service_api" },
+          { "elementReference": "service_db" }
         ]
       },
       "evidence": [
@@ -543,6 +580,48 @@ Proposal JSON shape:
   ]
 }
 ```
+
+### Proposal change reference
+
+Every change carries an `action`, an optional `clientReference` naming its result for later changes,
+an optional `evidence` list, and exactly one payload object chosen by the action.
+
+| Action | Payload field | `targetEntityId` |
+|---|---|---|
+| `CREATE_ELEMENT` | `element` | — |
+| `UPDATE_ELEMENT` | `element` | required |
+| `CREATE_RELATIONSHIP` | `relationship` | — |
+| `UPDATE_RELATIONSHIP` | `relationship` | required |
+| `CREATE_LINK` | `link` | — |
+| `CREATE_METADATA_DEFINITION` | `metadataDefinition` | — |
+| `CREATE_VIEW` | `view` | — |
+
+Anything referring to another element accepts either a UUID that already exists in the workspace or
+the `clientReference` of a change earlier in the same proposal. **The two forms use different field
+names, and they are not interchangeable:**
+
+| Payload | UUID form | `clientReference` form |
+|---|---|---|
+| `element` parent | `parentElementId` | `parentReference` |
+| `relationship` source | `sourceElementId` | `sourceReference` |
+| `relationship` target | `targetElementId` | `targetReference` |
+| `link` owner | `elementId` | `elementReference` |
+| `view` scope | `scopeElementId` | `scopeReference` |
+| `view.elements[]` member | `elementId` | `elementReference` |
+
+Note that the element parent is `parentReference`, not `parentElementReference`.
+
+Full field lists:
+
+- `element` — `type`, `name`, `description`, `parentElementId`, `parentReference`, `technology`, `metadata`
+- `relationship` — `sourceElementId`, `sourceReference`, `targetElementId`, `targetReference`, `type`, `description`, `technology`, `protocol`, `metadata`
+- `link` — `elementId`, `elementReference`, `provider`, `type`, `label`, `url`, `externalId`, `metadata`
+- `metadataDefinition` — `key`, `label`, `description`, `valueType`, `required`, `appliesTo`, `allowedValues`, `defaultValue`, `validationRules`, `displayOrder`
+- `view` — `name`, `description`, `type`, `scopeElementId`, `scopeReference`, `layoutDirection`, `settings`, `elements`, `includeRelationships`
+- `view.elements[]` — `elementId`, `elementReference`, `x`, `y`, `width`, `height`, `locked`, `visible`, `zIndex`
+
+Post any payload to `/proposals/validate` before submitting; unknown references are reported as
+`UNKNOWN_CLIENT_REFERENCE` errors there rather than failing at apply time.
 
 ### Diagram views with membership
 

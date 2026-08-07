@@ -39,6 +39,28 @@ export async function runProposalsInSequence(
   return { succeeded, failed };
 }
 
+export type ProposalTone = 'clear' | 'pending' | 'blocked';
+
+/**
+ * Drives the status light on the toolbar so pending agent work is visible without opening the
+ * dialog. Proposals arrive asynchronously, so nothing else would surface them.
+ */
+export function proposalIndicator(proposals: Array<Pick<AgentProposalSummary, 'status'>>) {
+  const pending = proposals.filter((proposal) => proposal.status === 'PENDING').length;
+  const blocked = proposals.filter((proposal) => proposal.status === 'VALIDATION_FAILED').length;
+  if (blocked > 0) {
+    return {
+      tone: 'blocked' as ProposalTone,
+      count: pending + blocked,
+      label: `${blocked} proposal${blocked === 1 ? '' : 's'} failed validation${pending > 0 ? `, ${pending} awaiting review` : ''}`
+    };
+  }
+  if (pending > 0) {
+    return { tone: 'pending' as ProposalTone, count: pending, label: `${pending} proposal${pending === 1 ? '' : 's'} awaiting review` };
+  }
+  return { tone: 'clear' as ProposalTone, count: 0, label: 'No proposals awaiting review' };
+}
+
 export function canApply(proposal: Pick<AgentProposalSummary, 'status'>) {
   return proposal.status === 'PENDING';
 }
@@ -271,7 +293,8 @@ function PayloadSummary({ payload }: { payload: Metadata }) {
   const entity = (payload.element ?? payload.relationship ?? payload.link ?? payload.metadataDefinition ?? payload.view) as Metadata | undefined;
   const description = entity && typeof entity === 'object' ? String(entity.description ?? entity.url ?? '') : '';
   if (!description) return null;
-  return <p>{description}</p>;
+  // The rendered text is clamped to a few lines, so keep the full value reachable on hover.
+  return <p title={description}>{description}</p>;
 }
 
 function payloadName(payload: Metadata) {

@@ -10,7 +10,7 @@ import { ModelExplorer } from '../features/model/ModelExplorer';
 import { ImportModal } from '../features/model/ImportModal';
 import { PropertiesPanel } from '../features/model/PropertiesPanel';
 import { WorkspacePicker } from '../features/model/WorkspacePicker';
-import { ProposalPanel } from '../features/proposals/ProposalPanel';
+import { ProposalPanel, proposalIndicator } from '../features/proposals/ProposalPanel';
 import { SearchBox } from '../features/search/SearchBox';
 import { ValidationPanel } from '../features/validation/ValidationPanel';
 import { useEditorStore } from '../stores/editorStore';
@@ -30,6 +30,14 @@ export function App() {
   const views = useQuery({ queryKey: ['views', workspaceId], queryFn: () => api.views(workspaceId!), enabled: Boolean(workspaceId) });
   const validation = useQuery({ queryKey: ['validation', workspaceId], queryFn: () => api.validation(workspaceId!), enabled: Boolean(workspaceId) });
   const metadataDefinitions = useQuery({ queryKey: ['metadata-definitions', workspaceId], queryFn: () => api.metadataDefinitions(workspaceId!), enabled: Boolean(workspaceId) });
+  // Agents submit proposals out of band, so poll to keep the toolbar light current.
+  const proposals = useQuery({
+    queryKey: ['agent-proposals', workspaceId],
+    queryFn: () => api.proposals(workspaceId!),
+    enabled: Boolean(workspaceId),
+    refetchInterval: 30_000
+  });
+  const proposalStatus = proposalIndicator(proposals.data ?? []);
 
   useEffect(() => {
     if (routeWorkspaceId && store.currentWorkspaceId !== routeWorkspaceId) {
@@ -96,7 +104,12 @@ export function App() {
         />
         <SearchBox workspaceId={workspaceId} />
         <button type="button" onClick={() => createView.mutate()} title="Create view"><Plus size={15} /> View</button>
-        <button type="button" onClick={() => setProposalsOpen(true)} title="Review proposals"><GitPullRequestArrow size={15} /> Proposals</button>
+        <button type="button" className="proposals-button" onClick={() => setProposalsOpen(true)} title={proposalStatus.label}>
+          <GitPullRequestArrow size={15} /> Proposals
+          <span className={`status-light ${proposalStatus.tone}`} aria-hidden="true" />
+          {proposalStatus.count > 0 && <span className="status-count">{proposalStatus.count}</span>}
+          <span className="visually-hidden">{proposalStatus.label}</span>
+        </button>
         <button type="button" onClick={() => setExportOpen(true)} title="Export diagram"><Download size={15} /> Export</button>
         <a className="toolbar-link" href={api.exportModelJsonUrl(workspaceId)}><Save size={15} /> JSON</a>
         <a className="toolbar-link" href={api.exportModelYamlUrl(workspaceId)}><Save size={15} /> YAML</a>

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canApply, canReject, runProposalsInSequence } from '../../src/features/proposals/ProposalPanel';
+import { canApply, canReject, proposalIndicator, runProposalsInSequence } from '../../src/features/proposals/ProposalPanel';
 
 describe('bulk proposal review', () => {
   it('processes every id and reports which succeeded', async () => {
@@ -53,6 +53,32 @@ describe('bulk proposal review', () => {
 
     expect(action).not.toHaveBeenCalled();
     expect(outcome).toEqual({ succeeded: [], failed: [] });
+  });
+
+  it('shows a clear light when nothing is waiting', () => {
+    expect(proposalIndicator([])).toMatchObject({ tone: 'clear', count: 0 });
+    expect(proposalIndicator([{ status: 'APPLIED' }, { status: 'REJECTED' }])).toMatchObject({ tone: 'clear', count: 0 });
+  });
+
+  it('shows a pending light counting only reviewable proposals', () => {
+    const indicator = proposalIndicator([{ status: 'PENDING' }, { status: 'PENDING' }, { status: 'APPLIED' }]);
+
+    expect(indicator.tone).toBe('pending');
+    expect(indicator.count).toBe(2);
+    expect(indicator.label).toBe('2 proposals awaiting review');
+  });
+
+  it('escalates to blocked when any proposal failed validation', () => {
+    const indicator = proposalIndicator([{ status: 'PENDING' }, { status: 'VALIDATION_FAILED' }]);
+
+    expect(indicator.tone).toBe('blocked');
+    expect(indicator.count).toBe(2);
+    expect(indicator.label).toMatch(/failed validation.*awaiting review/);
+  });
+
+  it('uses singular wording for a single proposal', () => {
+    expect(proposalIndicator([{ status: 'PENDING' }]).label).toBe('1 proposal awaiting review');
+    expect(proposalIndicator([{ status: 'VALIDATION_FAILED' }]).label).toBe('1 proposal failed validation');
   });
 
   it('only allows applying pending proposals, but rejecting anything not applied', () => {
